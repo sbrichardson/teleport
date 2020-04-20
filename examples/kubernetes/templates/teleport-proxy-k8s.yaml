@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: teleport-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: proxy
+  namespace: teleport-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: teleport-impersonation
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - users
+  - groups
+  - serviceaccounts
+  verbs:
+  - impersonate
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: teleport-proxy-impersonation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: teleport-impersonation
+subjects:
+- kind: ServiceAccount
+  name: proxy
+  namespace: teleport-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proxy-config
+  namespace: teleport-system
+data:
+  teleport.yaml: |
+    teleport:
+      auth_token: "REPLACE_ME with $PROXY_JOIN_TOKEN"
+      auth_servers:
+        - "REPLACE_ME with auth server address (not 'localhost')"
+
+    proxy_service:
+      enabled: yes
+      kubernetes:
+        enabled: yes
+        public_addr: "REPLACE_ME with output of 'minikube ip'"
+        listen_addr: "0.0.0.0:3026"
+
+    auth_service:
+      enabled: no
+
+    ssh_service:
+      enabled: no
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy
+  namespace: teleport-system
+  labels:
+    teleport-role: proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      teleport-role: proxy
+  template:
+    metadata:
+      labels:
+        teleport-role: proxy
+    spec:
+      containers:
+      - name: proxy
+        image: "quay.io/gravitational/teleport:REPLACE_ME"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/teleport/
+      volumes:
+        - name: config
+          configMap:
+            name: proxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy-service
+  namespace: teleport-system
+spec:
+  selector:
+    teleport-role: proxy
+  type: LoadBalancer
+  ports:
+    - name: https
+      protocol: TCP
+      port: 3080
+      targetPort: 3080
+    - name: ssh
+      protocol: TCP
+      port: 3023
+      targetPort: 3023
+    - name: k8s
+      protocol: TCP
+      port: 3026
+      targetPort: 3026

@@ -96,7 +96,37 @@ continue.
 
 ### Pod in cluster
 
-TODO(awly): fill this in; don't forget `minikube tunnel`
+Copy the template Kubernetes object definitions from
+`templates/teleport-proxy-k8s.yaml` and replace any fields marked as
+`REPLACE_ME`. Then, create the Kubernetes objects:
+
+```
+$ kubectl --context minikube apply -f /path/to/teleport-proxy-k8s.yaml
+```
+
+#### Get the proxy IP
+
+Due to the proxy running within a Kubernetes cluster, it won't be reachable via
+`localhost`. The `kubectl` command above created a `Service` of type
+`LoadBalancer` to get a routable address. With minikube, this `Service` won't
+get an IP assigned right away. Open a new terminal and run:
+
+```
+# minikube tunnel
+```
+
+This command will block while the tunnel is running. While it's running, the
+services within a minikube cluster will get routable IPs assigned.
+
+To get the IP of the Teleport proxy, run:
+
+```
+$ kubectl --namespace teleport-system get service proxy-service \
+    -o 'jsonpath={.status.loadBalancer.ingress[0].ip}'
+```
+
+Use this IP to reach the proxy, for example with `tsh login` or browser
+pop-ups.
 
 ## Create a Teleport user
 
