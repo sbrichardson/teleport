@@ -432,7 +432,7 @@ func (s *Server) HandleConnection(conn net.Conn) {
 	defer keepAliveTick.Stop()
 	keepAlivePayload := [8]byte{0}
 
-	ccx := NewConnectionContext()
+	ccx := NewConnectionContext(wconn, sconn)
 	defer ccx.Close()
 
 	for {
@@ -453,7 +453,7 @@ func (s *Server) HandleConnection(conn net.Conn) {
 				connClosed()
 				return
 			}
-			go s.newChanHandler.HandleNewChan(ccx, wconn, sconn, nch)
+			go s.newChanHandler.HandleNewChan(ccx, nch)
 			// send keepalive pings to the clients
 		case <-keepAliveTick.C:
 			const wantReply = true
@@ -473,13 +473,13 @@ func (f RequestHandlerFunc) HandleRequest(r *ssh.Request) {
 }
 
 type NewChanHandler interface {
-	HandleNewChan(*ConnectionContext, net.Conn, *ssh.ServerConn, ssh.NewChannel)
+	HandleNewChan(*ConnectionContext, ssh.NewChannel)
 }
 
-type NewChanHandlerFunc func(*ConnectionContext, net.Conn, *ssh.ServerConn, ssh.NewChannel)
+type NewChanHandlerFunc func(*ConnectionContext, ssh.NewChannel)
 
-func (f NewChanHandlerFunc) HandleNewChan(ccx *ConnectionContext, conn net.Conn, sshConn *ssh.ServerConn, ch ssh.NewChannel) {
-	f(ccx, conn, sshConn, ch)
+func (f NewChanHandlerFunc) HandleNewChan(ccx *ConnectionContext, ch ssh.NewChannel) {
+	f(ccx, ch)
 }
 
 type AuthMethods struct {

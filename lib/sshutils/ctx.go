@@ -18,6 +18,7 @@ package sshutils
 
 import (
 	"io"
+	"net"
 	"sync"
 
 	"golang.org/x/crypto/ssh"
@@ -26,10 +27,15 @@ import (
 	"github.com/gravitational/trace"
 )
 
-// ConnectionContext manages connection-wide state.  Most importantly,
-// agent forwarding.
+// ConnectionContext manages connection-level state.
 type ConnectionContext struct {
 	sync.RWMutex
+
+	// Connection is the base connection object.
+	Connection net.Conn
+
+	// ServerConn is authenticated ssh connection.
+	ServerConn *ssh.ServerConn
 
 	// env holds environment variables which should be
 	// set for all channels.
@@ -45,11 +51,12 @@ type ConnectionContext struct {
 	closers []io.Closer
 }
 
-// NewConnectionContext creates a new ConnectionContext instance wrapping
-// the specified ServerConn.
-func NewConnectionContext() *ConnectionContext {
+// NewConnectionContext creates a new ConnectionContext instance.
+func NewConnectionContext(conn net.Conn, sconn *ssh.ServerConn) *ConnectionContext {
 	return &ConnectionContext{
-		env: make(map[string]string),
+		Connection: conn,
+		ServerConn: sconn,
+		env:        make(map[string]string),
 	}
 }
 

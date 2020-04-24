@@ -287,7 +287,7 @@ type ServerContext struct {
 
 // NewServerContext creates a new *ServerContext which is used to pass and
 // manage resources.
-func NewServerContext(srv Server, conn *ssh.ServerConn, identityContext IdentityContext, parent *sshutils.ConnectionContext) (*ServerContext, error) {
+func NewServerContext(ccx *sshutils.ConnectionContext, srv Server, identityContext IdentityContext) (*ServerContext, error) {
 	clusterConfig, err := srv.GetAccessPoint().GetClusterConfig()
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -296,14 +296,15 @@ func NewServerContext(srv Server, conn *ssh.ServerConn, identityContext Identity
 	cancelContext, cancel := context.WithCancel(context.TODO())
 
 	ctx := &ServerContext{
-		Parent:            parent,
+		Parent:            ccx,
 		id:                int(atomic.AddInt32(&ctxID, int32(1))),
 		env:               make(map[string]string),
 		srv:               srv,
-		Conn:              conn,
+		Connection:        ccx.Connection,
+		Conn:              ccx.ServerConn,
 		ExecResultCh:      make(chan ExecResult, 10),
 		SubsystemResultCh: make(chan SubsystemResult, 10),
-		ClusterName:       conn.Permissions.Extensions[utils.CertTeleportClusterName],
+		ClusterName:       ccx.ServerConn.Permissions.Extensions[utils.CertTeleportClusterName],
 		ClusterConfig:     clusterConfig,
 		Identity:          identityContext,
 		clientIdleTimeout: identityContext.RoleSet.AdjustClientIdleTimeout(clusterConfig.GetClientIdleTimeout()),
@@ -317,8 +318,8 @@ func NewServerContext(srv Server, conn *ssh.ServerConn, identityContext Identity
 	}
 
 	fields := log.Fields{
-		"local":        conn.LocalAddr(),
-		"remote":       conn.RemoteAddr(),
+		"local":        ctx.Conn.LocalAddr(),
+		"remote":       ctx.Conn.RemoteAddr(),
 		"login":        ctx.Identity.Login,
 		"teleportUser": ctx.Identity.TeleportUser,
 		"id":           ctx.id,
@@ -340,7 +341,7 @@ func NewServerContext(srv Server, conn *ssh.ServerConn, identityContext Identity
 			ClientIdleTimeout:     ctx.clientIdleTimeout,
 			Clock:                 ctx.srv.GetClock(),
 			Tracker:               ctx,
-			Conn:                  conn,
+			Conn:                  ctx.Conn,
 			Context:               cancelContext,
 			TeleportUser:          ctx.Identity.TeleportUser,
 			Login:                 ctx.Identity.Login,
